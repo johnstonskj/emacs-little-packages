@@ -48,11 +48,20 @@
 
 
 ;; --------------------------------------------------------------------------
-;; Constants
+;; Customization
+
 (defgroup smithy-mode nil
   "Smithy IDL language support."
   :tag "smithy"
   :prefix "smithy-")
+
+(defcustom smithy-mode-toolchain 'atelier
+  "Tool-chain for Smithy commands."
+  :type '(choice (const :tag "AWS" aws)
+                 (const :tag "Atelier" atelier)
+                 (const :tag "None" nil))
+  :group 'smithy-mode)
+
 
 ;; --------------------------------------------------------------------------
 ;; Constants
@@ -126,14 +135,13 @@
 
 (rx-define smithy-namespace
   (seq
-       smithy-identifier
-       (* (seq ?. smithy-identifier))))
-;;(message "%s" (rx smithy-namespace))
+   smithy-identifier
+   (* (seq ?. smithy-identifier))))
 
 (rx-define smithy-root-shape-id
   (seq
-       (optional (seq smithy-namespace ?#))
-       smithy-identifier))
+   (optional (seq smithy-namespace ?#))
+   smithy-identifier))
 ;;(message "%s" (rx smithy-root-shape-id))
 
 (rx-define smithy-shape-id
@@ -186,11 +194,84 @@
 ;; --------------------------------------------------------------------------
 ;; Abreviation table
 
-(defvar smithy-mode-abbrev-table nil
+(define-abbrev-table 'smithy-mode-abbrev-table
+  '(("ID" "Id")
+    ("ops" "operations")))
+
+(defvar smithy-mode-abbrev-table
+  smithy-mode-abbrev-table
   "Abbreviation table used in `smithy-mode' buffers.")
 
-(define-abbrev-table 'smithy-mode-abbrev-table
-  '())
+
+;; --------------------------------------------------------------------------
+;; Key Mappings
+
+(defvar smithy-mode-map
+  (let ((map (make-sparse-keymap)))
+    ;;    (define-key map "C-c c" #'do-stuff)
+    map)
+  "Key mappings for `smithy-mode' buffers.")
+
+
+;; --------------------------------------------------------------------------
+;; Tool integrations
+
+(defvar smithy-mode-lint-tool-cmd
+  "cargo-atelier")
+
+(defvar smithy-mode-lint-tool-cmdline
+  '("lint" "-i" "%i"))
+
+(defvar smithy-mode-documentation-tool-cmd
+  "cargo-atelier")
+
+(defvar smithy-mode-documentation-tool-cmdline
+  '("document" "-i" "%i" "-o" "%o"))
+
+
+(defun smithy-mode-lint-buffer ()
+  ""
+  (interactive
+   nil))
+
+
+(defun smithy-mode-document-buffer (&optional format)
+  ""
+  (interactive)
+  (when (buffer-modified-p)
+    (when (y-or-n-p "Save buffer first?")
+      (save-buffer)))
+  (let ((output-buffer (get-buffer-create "*Smithy Document*")))
+    (with-current-buffer output-buffer
+      (erase-buffer)
+      (insert
+       (shell-command-to-string
+        (string-join
+         (cons smithy-mode-documentation-tool-cmd
+               (mapcar (lambda (a)
+                         (cond
+                          ((= a "%i") (buffer-file-name))
+                          ((= a "%o") (concat (  (buffer-file-name) ".out"))
+                          (t a)))
+                       smithy-mode-documentation-tool-cmdline)))))))
+  (message "done"))
+
+  (defun file-name-with-extension fname ext)
+  
+  (message "%s"
+           (string-join
+            (cons smithy-mode-documentation-tool-cmd
+                  (mapcar (lambda (a)
+                            (cond
+                             ((string= a "%i") (buffer-file-name))
+                             ((string= a "%o") (file-name-with-extension
+                                                (buffer-file-name) "md"))
+                            (t a)))
+                  smithy-mode-documentation-tool-cmdline))
+           " " ))
+         
+;; --------------------------------------------------------------------------
+;; Actual mode
 
 ;;;###autoload
 (define-derived-mode
@@ -209,8 +290,8 @@
   (setq-local comment-start "//")
   (setq-local comment-end "")
   (setq-local comment-start-skip "//+[\t ]*")
-;;   (setq-local comment-indent-function #'smithy-indent-comment)
-;;   (setq-local indent-line-function #'smithy-indent-line)
+  ;;   (setq-local comment-indent-function #'smithy-indent-comment)
+  ;;   (setq-local indent-line-function #'smithy-indent-line)
   (setq-local indent-tabs-mode t))
 
 ;;;###autoload
